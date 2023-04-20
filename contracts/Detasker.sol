@@ -35,7 +35,10 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         Job[] jobs;
         Rating[] ratings;
         Skill[] skills;
+        Dispute[] dispute;
+        Freelance[] freelance;
         uint256 jobCount;
+        uint256 freelanceCount;
         uint256 ratingCount;
         uint256 tagCount;
         uint256 skillCount;
@@ -45,6 +48,13 @@ contract Detasker is ERC20("Detasker", "dtsk") {
     struct Dispute {
         string reason;
         uint timestamp;
+    }
+    struct Freelance {
+        uint256 id;
+        bool isFreelancer;
+        bool active;
+        string mainSkills;
+        uint256[] skillsId;
     }
     struct Job {
         bool hasFunds;
@@ -68,7 +78,7 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         bool assigned;
         uint256 dateCompleted;
         uint256 datePublished;
-        Dispute[] dispute;
+        uint256[] dispute;
         bool deleted;
     }
 
@@ -94,25 +104,28 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         uint256 id;
         uint256 profileId;
         string skill;
+        string skillName;
+        string url;
+        address user;
     }
 
     struct Profile {
         uint256 id;
+        uint256 freeLanceId;
         string name;
         string email;
-        Social[] socials; // 2D array [ 0: [ name, url ] ]
+        Social[] socials;
         uint256 signedUp;
         string image;
-        ShowcaseWork[] showcaseWork;
         uint256[] jobsId;
         uint256[] ratings;
-        uint256[] skills;
         mapping(address => uint256) escrow;
     }
 
     struct NewProfile {
         string name;
         string email;
+        Freelance freelance;
         string image;
         Social[] socials; // 2D array [ 0: [ name, url ] ]
         ShowcaseWork[] showcaseWork;
@@ -150,14 +163,28 @@ contract Detasker is ERC20("Detasker", "dtsk") {
     //     users[msg.sender].jobsId.push(vars.jobCount);
     // }
 
+    function createFreelance(
+        address _address,
+        Freelance memory freelance
+    ) public {
+        require(
+            users[_address].freeLanceId != 0,
+            "Please go through the update method"
+        );
+        vars.freelanceCount++;
+        freelance.id = vars.freelanceCount;
+        vars.freelance.push(freelance);
+        users[_address].freeLanceId = vars.freelanceCount;
+    }
+
     function createUser(address _address, NewProfile memory _profile) public {
         vars.userCount++;
-
         users[_address].id = vars.userCount;
         users[_address].name = _profile.name;
         users[_address].name = _profile.email;
         users[_address].signedUp = block.timestamp;
         users[_address].image = _profile.image;
+        createFreelance(_address, _profile.freelance);
 
         if (_profile.skills.length != 0) {
             for (uint i = 0; i < _profile.skills.length; i++) {
@@ -189,10 +216,12 @@ contract Detasker is ERC20("Detasker", "dtsk") {
     }
 
     function createSkill(address _address, Skill memory _skill) public {
-        vars.skillCount++;
-        _skill.id = vars.skillCount;
-        users[_address].skills.push(vars.skillCount);
-        vars.skills[vars.skillCount] = _skill;
+        uint256 id = vars.skillCount++;
+        _skill.id = id;
+        _skill.user = _address;
+        vars.freelance[users[_address].freeLanceId].skillsId.push(id);
+        vars.skills[id] = _skill;
+        vars.skillCount = id;
     }
 
     function createSocial(address _address, Social memory _social) public {
@@ -234,12 +263,12 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         );
     }
 
-    function dispueAJob(string calldata _reason, uint256 _jobId) external {
-        Job memory _job = getJobById(_jobId);
-        _job.dispute[_job.dispute.length] = Dispute(_reason, block.timestamp);
-        _job.completed = false;
-        setJobById(_job);
-    }
+    // function dispueAJob(string calldata _reason, uint256 _jobId) external {
+    //     Job memory _job = getJobById(_jobId);
+    //     _job.dispute[_job.dispute.length] = Dispute(_reason, block.timestamp);
+    //     _job.completed = false;
+    //     setJobById(_job);
+    // }
 
     function assignJob(address _address, uint jobId) public {
         Job memory _job = getJobById(jobId);

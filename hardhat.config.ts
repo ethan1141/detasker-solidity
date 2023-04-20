@@ -1,9 +1,36 @@
 import { HardhatUserConfig, task, types } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomiclabs/hardhat-ethers";
-
+import "hardhat-deploy";
+import "@typechain/hardhat";
+import "solidity-coverage";
+import { config as dotEnvConfig } from "dotenv";
+dotEnvConfig();
 const config: HardhatUserConfig = {
-  solidity: "0.8.19",
+  solidity: {
+    version: "0.8.19",
+    settings: { optimizer: { enabled: true, runs: 200 } },
+  },
+  networks: {
+    bscTestnet: {
+      url: "https://data-seed-prebsc-1-s1.binance.org:8545",
+      accounts: [process.env.KEY!],
+      chainId: 97,
+    },
+  },
+  gasReporter: {
+    enabled: false,
+    outputFile: "gas-report.txt",
+    noColors: true,
+    currency: "USD",
+    coinmarketcap: "22",
+    token: "BNB",
+  },
+  namedAccounts: {
+    deployer: {
+      default: 0,
+    },
+  },
 };
 task(
   "flat",
