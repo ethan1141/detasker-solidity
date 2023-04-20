@@ -20,6 +20,7 @@ describe("Detasker", function () {
   it("Add a user", async function () {
     const user: Detasker.NewProfileStruct = {
       name: "ethan",
+      freelance: ,
       email: "ethnruss@gmail.com",
       image: "www",
       socials: [],
