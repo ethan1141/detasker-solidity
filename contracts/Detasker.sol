@@ -62,13 +62,13 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         uint256 profileId;
         string title;
         string description;
-        string[] img; // with greenfield
+        string[] documents; // with greenfield
         address owner;
         address requester;
         uint256 postedDate;
         uint256 date;
         uint256 datePaid;
-        string documents;
+        string img; // with greenfield
         uint256 requestedPaymentAmount;
         address token;
         uint256[] tags;
@@ -118,7 +118,7 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         uint256 signedUp;
         string image;
         uint256[] jobsId;
-        uint256[] ratings;
+        Rating[] rating;
         mapping(address => uint256) escrow;
     }
 
@@ -168,18 +168,19 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         Freelance memory freelance
     ) public {
         require(
-            users[_address].freeLanceId != 0,
-            "Please go through the update method"
+            users[_address].freeLanceId == 0,
+            "Please go through the update method. "
         );
-        vars.freelanceCount++;
-        freelance.id = vars.freelanceCount;
+        uint256 id = vars.freelance.length + 1;
+        freelance.id = id;
         vars.freelance.push(freelance);
-        users[_address].freeLanceId = vars.freelanceCount;
+        users[_address].freeLanceId = id;
     }
 
     function createUser(address _address, NewProfile memory _profile) public {
-        vars.userCount++;
-        users[_address].id = vars.userCount;
+        vars.userCount += 1;
+        uint256 id = vars.userCount;
+        users[_address].id = id;
         users[_address].name = _profile.name;
         users[_address].name = _profile.email;
         users[_address].signedUp = block.timestamp;
@@ -216,11 +217,13 @@ contract Detasker is ERC20("Detasker", "dtsk") {
     }
 
     function createSkill(address _address, Skill memory _skill) public {
-        uint256 id = vars.skillCount++;
+        uint id = vars.skills.length + 1;
+        Profile storage p = users[_address];
         _skill.id = id;
+        _skill.profileId = p.id;
         _skill.user = _address;
-        vars.freelance[users[_address].freeLanceId].skillsId.push(id);
-        vars.skills[id] = _skill;
+        vars.freelance[p.freeLanceId - 1].skillsId.push(id);
+        vars.skills.push(_skill);
         vars.skillCount = id;
     }
 
@@ -228,39 +231,84 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         users[_address].socials.push(_social);
     }
 
-    function createJob(address _address, Job memory _job) public {
-        vars.jobCount++;
-        _job.id = vars.jobCount;
-        if (_job.publish) {
-            _job.postedDate = block.timestamp;
-        }
-        _job.owner = _address;
-        users[_address].jobsId.push(vars.jobCount);
-        vars.jobs[vars.jobCount] = _job;
+    function getJobCount() external view returns (uint256) {
+        return vars.jobs.length;
     }
 
-    function completeJob(
-        address _address,
-        Rating memory _rating,
-        uint256 jobId
-    ) public {
-        Job memory _job = getJobById(jobId);
-        require(_job.requester == _address, "This isn't your assigned job");
+    function getSkillCount() external view returns (uint256) {
+        return vars.skills.length;
+    }
+
+    function getSkill(uint256 i) external view returns (Skill memory) {
+        return vars.skills[i];
+    }
+
+    function createJob(address _address, Job memory _job) public {
+        uint256 index = vars.jobs.length + 1;
+        _job.profileId = users[_address].id;
+        _job.id = index;
+        _job.owner = _address;
+        _job.hasFunds = false;
+        _job.completed = false;
+        _job.paid = false;
+        _job.assigned = false;
+        _job.deleted = false;
+        users[_address].jobsId.push(index);
+        vars.jobs.push(_job);
+    }
+
+    function completeJob(uint256 _jobId) external payable {
+        Job memory _job = getJobById(_jobId);
         require(
-            _rating.rating >= 0 && _rating.rating <= 5,
-            "Please give this job a rating out of 5"
+            _job.requester ==
+                address(0x81e70AAF7475AabA6D919e3A889b6D94C792c8A3),
+            "Sorry, your not allowed to withdraw funds. Only the job requester is allowed"
         );
+        // require(
+        //     IERC20(_job.token).allowance(address(this), address(this)) <
+        //         msg.value,
+        //     "Amount approved is less then token transferred amount"
+        // );
 
-        vars.ratingCount++;
-        _rating.id = vars.ratingCount;
-        vars.ratings[vars.ratingCount] = _rating;
-
+        if (msg.value >= _job.requestedPaymentAmount) {
+            // IERC20(_job.token).transferFrom(
+            //     address(this),
+            //     address(0x81e70AAF7475AabA6D919e3A889b6D94C792c8A3),
+            //     msg.value
+            // );
+            // users[address(0x81e70AAF7475AabA6D919e3A889b6D94C792c8A3)].escrow[
+            //         _job.token
+            //     ] -= msg.value;
+            _job.paid = true;
+            _job.completed = true;
+            _job.datePaid = block.timestamp;
+            setJobById(_job);
+        }
         emit CompletingJob(
             _job.owner,
             _job.requester,
             _job.requestedPaymentAmount,
             true
         );
+    }
+
+    function giveFeedback(address _address, Rating memory _rating) public {
+        Job memory _job = getJobById(_rating.jobId - 1);
+        require(_job.owner == _address, "This isn't your assigned job");
+        require(
+            _rating.rating >= 0 && _rating.rating <= 5,
+            "Please give this job a rating out of 5"
+        );
+
+        uint256 id = vars.ratings.length + 1;
+        _rating.id = id;
+        users[_job.requester].rating.push(_rating);
+    }
+
+    function getRatingsArray(
+        address _address
+    ) external view returns (Rating[] memory) {
+        return users[_address].rating;
     }
 
     // function dispueAJob(string calldata _reason, uint256 _jobId) external {
@@ -270,7 +318,7 @@ contract Detasker is ERC20("Detasker", "dtsk") {
     //     setJobById(_job);
     // }
 
-    function assignJob(address _address, uint jobId) public {
+    function assignJob(address _address, uint256 jobId) public {
         Job memory _job = getJobById(jobId);
         _job.assigned = true;
         _job.requester = _address;
@@ -294,7 +342,7 @@ contract Detasker is ERC20("Detasker", "dtsk") {
     }
 
     function setJobById(Job memory _job) private {
-        vars.jobs[_job.id] = _job;
+        vars.jobs[_job.id - 1] = _job;
     }
 
     function payForJobByOwner(uint256 _jobId) public payable {
@@ -306,21 +354,6 @@ contract Detasker is ERC20("Detasker", "dtsk") {
         );
         require(_job.owner == msg.sender, "You don't own this job");
         ownerWithdraw(_job.token, _jobId);
-        emit PaidForAJob(_job.requestedPaymentAmount, block.timestamp);
-    }
-
-    function recievePaymentForJobByRequester(uint256 _jobId) public payable {
-        Job memory _job = getJobById(_jobId);
-        require(!_job.paid, "This job has alread been paid");
-        require(
-            !_job.completed,
-            "wait for the assignee to confirm completeness"
-        );
-        require(
-            _job.requester != msg.sender,
-            "You are not assigned to this job"
-        );
-        jobWithdraw(_job.token, _jobId);
         emit PaidForAJob(_job.requestedPaymentAmount, block.timestamp);
     }
 
@@ -365,21 +398,6 @@ contract Detasker is ERC20("Detasker", "dtsk") {
             users[msg.sender].escrow[_token] += msg.value;
             _job.token = _token;
             _job.hasFunds = true;
-            setJobById(_job);
-        }
-    }
-
-    function jobWithdraw(address _token, uint256 jobId) public payable {
-        Job memory _job = getJobById(jobId);
-        require(
-            IERC20(_token).allowance(address(this), msg.sender) < msg.value,
-            "Amount approved is less then token transferred amount"
-        );
-        if (msg.value >= _job.requestedPaymentAmount) {
-            IERC20(_token).transferFrom(address(this), msg.sender, msg.value);
-            users[msg.sender].escrow[_token] -= msg.value;
-            _job.paid = true;
-            _job.datePaid = block.timestamp;
             setJobById(_job);
         }
     }

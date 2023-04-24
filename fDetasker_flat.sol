@@ -1,10 +1,8 @@
-// SPDX-License-Identifier: MIXED
-
 // Sources flattened with hardhat v2.13.1 https://hardhat.org
 
 // File @openzeppelin/contracts/token/ERC20/IERC20.sol@v4.8.2
 
-// License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.6.0) (token/ERC20/IERC20.sol)
 
 pragma solidity ^0.8.0;
@@ -90,7 +88,7 @@ interface IERC20 {
 
 // File @openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol@v4.8.2
 
-// License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (token/ERC20/extensions/IERC20Metadata.sol)
 
 pragma solidity ^0.8.0;
@@ -120,7 +118,7 @@ interface IERC20Metadata is IERC20 {
 
 // File @openzeppelin/contracts/utils/Context.sol@v4.8.2
 
-// License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (utils/Context.sol)
 
 pragma solidity ^0.8.0;
@@ -148,7 +146,7 @@ abstract contract Context {
 
 // File @openzeppelin/contracts/token/ERC20/ERC20.sol@v4.8.2
 
-// License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.8.0) (token/ERC20/ERC20.sol)
 
 pragma solidity ^0.8.0;
@@ -539,7 +537,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
 // File @openzeppelin/contracts/security/ReentrancyGuard.sol@v4.8.2
 
-// License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.8.0) (security/ReentrancyGuard.sol)
 
 pragma solidity ^0.8.0;
@@ -612,7 +610,7 @@ abstract contract ReentrancyGuard {
 
 // File contracts/Detasker.sol
 
-// License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 /**
  * @title Detasker - a simple smart contract to facilitate users in web3 anouncing jobs and/or skills
@@ -632,7 +630,7 @@ pragma solidity ^0.8.19;
 //     }
 // }
 
-contract Detasker is ERC20("Detasker", "tsk") {
+contract Detasker is ERC20("Detasker", "dtsk") {
     mapping(address => Profile) public users;
     Item public vars;
     uint public timeForConformation = getConformationDays(30);
@@ -648,19 +646,29 @@ contract Detasker is ERC20("Detasker", "tsk") {
         Job[] jobs;
         Rating[] ratings;
         Skill[] skills;
+        Dispute[] dispute;
+        Freelance[] freelance;
         uint256 jobCount;
+        uint256 freelanceCount;
         uint256 ratingCount;
         uint256 tagCount;
         uint256 skillCount;
         uint256 userCount;
+        address bnbToken;
     }
-    event Dispute(
-        string reason,
-        uint amount,
-        uint timestamp,
-        bool returningFunds
-    );
+    struct Dispute {
+        string reason;
+        uint timestamp;
+    }
+    struct Freelance {
+        uint256 id;
+        bool isFreelancer;
+        bool active;
+        string mainSkills;
+        uint256[] skillsId;
+    }
     struct Job {
+        bool hasFunds;
         uint256 id;
         uint256 profileId;
         string title;
@@ -681,9 +689,8 @@ contract Detasker is ERC20("Detasker", "tsk") {
         bool assigned;
         uint256 dateCompleted;
         uint256 datePublished;
-        bool dispute;
+        uint256[] dispute;
         bool deleted;
-        string disputeDate;
     }
 
     struct Tag {
@@ -708,25 +715,28 @@ contract Detasker is ERC20("Detasker", "tsk") {
         uint256 id;
         uint256 profileId;
         string skill;
+        string skillName;
+        string url;
+        address user;
     }
 
     struct Profile {
         uint256 id;
+        uint256 freeLanceId;
         string name;
         string email;
-        Social[] socials; // 2D array [ 0: [ name, url ] ]
+        Social[] socials;
         uint256 signedUp;
         string image;
-        ShowcaseWork[] showcaseWork;
         uint256[] jobsId;
         uint256[] ratings;
-        uint256[] skills;
         mapping(address => uint256) escrow;
     }
 
     struct NewProfile {
         string name;
         string email;
+        Freelance freelance;
         string image;
         Social[] socials; // 2D array [ 0: [ name, url ] ]
         ShowcaseWork[] showcaseWork;
@@ -752,6 +762,7 @@ contract Detasker is ERC20("Detasker", "tsk") {
 
     constructor(address _owner) {
         vars.owner = _owner;
+        vars.bnbToken = address(0xEE786A1aA32fc164cca9A28F763Fbc835E748129); //
     }
 
     // function postAJob(Job memory _job) public {
@@ -763,14 +774,28 @@ contract Detasker is ERC20("Detasker", "tsk") {
     //     users[msg.sender].jobsId.push(vars.jobCount);
     // }
 
+    function createFreelance(
+        address _address,
+        Freelance memory freelance
+    ) public {
+        require(
+            users[_address].freeLanceId != 0,
+            "Please go through the update method"
+        );
+        vars.freelanceCount++;
+        freelance.id = vars.freelanceCount;
+        vars.freelance.push(freelance);
+        users[_address].freeLanceId = vars.freelanceCount;
+    }
+
     function createUser(address _address, NewProfile memory _profile) public {
         vars.userCount++;
-
         users[_address].id = vars.userCount;
         users[_address].name = _profile.name;
         users[_address].name = _profile.email;
         users[_address].signedUp = block.timestamp;
         users[_address].image = _profile.image;
+        createFreelance(_address, _profile.freelance);
 
         if (_profile.skills.length != 0) {
             for (uint i = 0; i < _profile.skills.length; i++) {
@@ -802,10 +827,12 @@ contract Detasker is ERC20("Detasker", "tsk") {
     }
 
     function createSkill(address _address, Skill memory _skill) public {
-        vars.skillCount++;
-        _skill.id = vars.skillCount;
-        users[_address].skills.push(vars.skillCount);
-        vars.skills[vars.skillCount] = _skill;
+        uint256 id = vars.skillCount++;
+        _skill.id = id;
+        _skill.user = _address;
+        vars.freelance[users[_address].freeLanceId].skillsId.push(id);
+        vars.skills[id] = _skill;
+        vars.skillCount = id;
     }
 
     function createSocial(address _address, Social memory _social) public {
@@ -847,6 +874,13 @@ contract Detasker is ERC20("Detasker", "tsk") {
         );
     }
 
+    // function dispueAJob(string calldata _reason, uint256 _jobId) external {
+    //     Job memory _job = getJobById(_jobId);
+    //     _job.dispute[_job.dispute.length] = Dispute(_reason, block.timestamp);
+    //     _job.completed = false;
+    //     setJobById(_job);
+    // }
+
     function assignJob(address _address, uint jobId) public {
         Job memory _job = getJobById(jobId);
         _job.assigned = true;
@@ -874,36 +908,31 @@ contract Detasker is ERC20("Detasker", "tsk") {
         vars.jobs[_job.id] = _job;
     }
 
-    function payForJob(
-        address _address,
-        uint256 _jobId,
-        bool requester
-    ) public {
+    function payForJobByOwner(uint256 _jobId) public payable {
         Job memory _job = getJobById(_jobId);
         require(!_job.paid, "This job has alread been paid");
         require(
-            _job.completed,
+            !_job.completed,
             "wait for the assignee to confirm completeness"
         );
-        if (requester) {
-            require(_job.requester == _address, "This isn't your assigned job");
-            if (
-                transferFunds(
-                    IERC20(_job.token),
-                    _job.owner,
-                    _job.requestedPaymentAmount
-                )
-            ) {
-                _job.paid = true;
-                _job.datePaid = block.timestamp;
-                setJobById(_job);
-                emit PaidForAJob(_job.requestedPaymentAmount, block.timestamp);
-            } else {
-                require(true, "Payment failed");
-            }
-        } else {
-            require(_job.owner == _address, "This isn't your job");
-        }
+        require(_job.owner == msg.sender, "You don't own this job");
+        ownerWithdraw(_job.token, _jobId);
+        emit PaidForAJob(_job.requestedPaymentAmount, block.timestamp);
+    }
+
+    function recievePaymentForJobByRequester(uint256 _jobId) public payable {
+        Job memory _job = getJobById(_jobId);
+        require(!_job.paid, "This job has alread been paid");
+        require(
+            !_job.completed,
+            "wait for the assignee to confirm completeness"
+        );
+        require(
+            _job.requester != msg.sender,
+            "You are not assigned to this job"
+        );
+        jobWithdraw(_job.token, _jobId);
+        emit PaidForAJob(_job.requestedPaymentAmount, block.timestamp);
     }
 
     function setJobDoneByOwner(address _address, uint256 jobId) public {
@@ -913,29 +942,20 @@ contract Detasker is ERC20("Detasker", "tsk") {
         setJobById(_job);
     }
 
-    function transferFunds(
-        IERC20 token,
-        address to,
-        uint256 amount
-    ) private returns (bool) {
-        return token.transfer(to, amount);
+    function setJobDoneByRequester(address _address, uint256 jobId) public {
+        Job memory _job = getJobById(jobId);
+        require(_job.requester == _address, "You don't own this job");
+        _job.completed = true;
+        _job.dateCompleted = block.timestamp;
+        setJobById(_job);
     }
 
     function approveTokenSpend(
-        address tokenContract,
+        address _token,
         address spender,
         uint amount
     ) public returns (bool) {
-        return ERC20(tokenContract).approve(spender, amount);
-    }
-
-    function approveTokenSpendAndWithdraw(
-        address tokenContract,
-        address spender,
-        uint amount
-    ) public returns (bool) {
-        approveTokenSpend(tokenContract, spender, amount);
-        return transferFunds(IERC20(tokenContract), address(this), amount);
+        return ERC20(_token).approve(spender, amount);
     }
 
     function allowance(
@@ -945,16 +965,72 @@ contract Detasker is ERC20("Detasker", "tsk") {
         return ERC20(_token).allowance(address(this), _address);
     }
 
-    function getAmountInEscrow(
+    function Jobdeposit(address _token, uint256 jobId) public payable {
+        Job memory _job = getJobById(jobId, msg.sender);
+        require(
+            IERC20(_token).allowance(msg.sender, address(this)) < msg.value,
+            "Amount approved is less then token transferred amount to contract"
+        );
+        if (msg.value >= _job.requestedPaymentAmount) {
+            IERC20(_token).transfer(address(this), msg.value);
+            users[msg.sender].escrow[_token] += msg.value;
+            _job.token = _token;
+            _job.hasFunds = true;
+            setJobById(_job);
+        }
+    }
+
+    function jobWithdraw(address _token, uint256 jobId) public payable {
+        Job memory _job = getJobById(jobId);
+        require(
+            IERC20(_token).allowance(address(this), msg.sender) < msg.value,
+            "Amount approved is less then token transferred amount"
+        );
+        if (msg.value >= _job.requestedPaymentAmount) {
+            IERC20(_token).transferFrom(address(this), msg.sender, msg.value);
+            users[msg.sender].escrow[_token] -= msg.value;
+            _job.paid = true;
+            _job.datePaid = block.timestamp;
+            setJobById(_job);
+        }
+    }
+
+    /**
+     *
+     * @param _token s
+     * @param jobId we
+     */
+    function ownerWithdraw(address _token, uint256 jobId) public payable {
+        Job memory _job = getJobById(jobId);
+        require(
+            IERC20(_token).allowance(address(this), _job.owner) < msg.value,
+            "Amount approved is less then token transferred amount"
+        );
+        if (msg.value >= _job.requestedPaymentAmount) {
+            IERC20(_token).transferFrom(address(this), _job.owner, msg.value);
+            users[msg.sender].escrow[_token] -= msg.value;
+            _job.paid = true;
+            _job.datePaid = block.timestamp;
+            setJobById(_job);
+        }
+    }
+
+    function balanceOf(
         address _address,
         address _token
-    ) public view returns (uint256) {
+    ) external view returns (uint256) {
         return users[_address].escrow[_token];
     }
 
     receive() external payable {
-        users[msg.sender].escrow[
-            address(0xEE786A1aA32fc164cca9A28F763Fbc835E748129)
-        ] += msg.value;
+        users[msg.sender].escrow[vars.bnbToken] += msg.value;
     }
 }
+
+
+// File contracts/libs/utils.sol
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+library Utilities {}
